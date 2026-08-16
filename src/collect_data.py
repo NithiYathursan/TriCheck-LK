@@ -1,6 +1,6 @@
 import requests #send HTTP requests and download content from web page
 from bs4 import BeautifulSoup #Parse HTML content & esy to find elements such as links and tables
-from urllib.parse import urljoin,urlparse,parse_qs
+from urllib.parse import urljoin,urlparse,parse_qs  ## used to combine a base website URL with realtive url for creating complete url
 import csv
 
 #offcial Srilankan government circular page
@@ -24,11 +24,6 @@ links=soup.find_all("a")
 
 #print the count of links on that web page
 print("Total links found:",len(links))
-
-
-# used to combine a base website URL with realtive url for creating complete url
-
-
 
 circular_links=[]
 
@@ -65,37 +60,6 @@ for circular_url in circular_links[:5]:
 
 
 print("*"*40)
-# inspecting the structure of each circular page
-
-#take first circular detail page for testing
-# test_circular_url=circular_links[0]
-
-#send a request to the circular detail page
-# circular_response=requests.get(test_circular_url)
-
-#Parse the HTML of the circular detail page
-# circular_soup=BeautifulSoup(circular_response.text,"html.parser")
-
-#Find all links inside this circular detail page
-# detail_links=circular_soup.find_all("a")
-
-#Variables to store the 3 language document urls
-#None - The URL has not been found yet
-# english_url=None
-# sinhala_url=None
-# tamil_url=None
-
-
-
-
-   
-   
-#Display the 3 document URLs.   
-# print("English:",english_url)
-# print("Sinhala:",sinhala_url)
-# print("Tamil:",tamil_url)
-
-
 
 #List to store the information collected from every circular
 all_circulars=[]
