@@ -2,9 +2,10 @@ import requests #send HTTP requests and download content from web page
 from bs4 import BeautifulSoup #Parse HTML content & esy to find elements such as links and tables
 from urllib.parse import urljoin,urlparse,parse_qs  ## used to combine a base website URL with realtive url for creating complete url
 import csv
+import time 
 
 #offcial Srilankan government circular page
-url= "https://pubad.gov.lk/web/index.php?lang=en&option=com_circular&view=circulars"
+url = "https://pubad.gov.lk/web/index.php?lang=en&option=com_circular&view=circulars"
 
 #Send a GET request to the website
 response=requests.get(url)
@@ -25,50 +26,124 @@ links=soup.find_all("a")
 #print the count of links on that web page
 print("Total links found:",len(links))
 
+
+#Store circular detail links collected from multiple pages
 circular_links=[]
 
-#loop through the first 10 links found on the page
-for link in links:
+#Store previous collected URLs so duplicates are avoided
+seen_links = set()
 
-    #href attribute usually contains the destination url
-    href=link.get("href")
+# Start from the first listing page
+offset = 0
 
-    #skip links that donot have href
-    if href is None:
-        continue
+while True:
 
-    #Get the visible text of the link
-    text=link.get_text(strip=True)
+    # Create the current listing page URL
+    page_url = url + f"&limitstart={offset}"
 
-    #Convert relative url to complete url
-    full_url=urljoin(url,href) 
+    print("Reading listing page:", page_url)
+
+    page_response = requests.get(
+    page_url,
+    timeout=30
+    )
+
+    # Stop the program if the website returns
+    # an unsuccessful HTTP status code.
+    page_response.raise_for_status()
+
+    page_soup = BeautifulSoup(
+        page_response.text,
+        "html.parser"
+    )
+
+    page_links = page_soup.find_all("a")
+
+    # Count how many NEW circular links
+    # are found on this particular page.
+    new_links_count = 0
+
+    for link in page_links:
+
+        href = link.get("href")
+
+        if href is None:
+            continue
+
+        full_url = urljoin(page_url, href)
+
+        if (
+            "view=circular" in full_url
+            and "cid=" in full_url
+        ):
+
+            if full_url not in seen_links:
+
+                seen_links.add(full_url)
+                circular_links.append(full_url)
+
+                new_links_count += 1
+
+    print(
+        "New circulars on this page:",
+        new_links_count
+    )
+
+    # If the page gives no new circulars,
+    # we have reached the end of the archive.
+    if new_links_count == 0:
+        break
+    
+    # Move to the next listing page.
+    # Each page contains 10 circulars.
+    offset += 10
+
+    # Small delay before requesting next page.
+    time.sleep(0.5)
 
 
-    #Circular detail page contains "view=circular" and a circular ID "cid="
-    if "view=circular" in full_url and "cid=" in full_url:
-
-        #Add only if the URL has not already been collected
-        if full_url not in circular_links:
-            circular_links.append(full_url)
-
-#shoe the no of circular detail pages were found
-print("Circular links found:",len(circular_links))
-
-#print few links
-for circular_url in circular_links[:5]:
-    print(circular_url)   
+print(
+    "Total circular links found:",
+    len(circular_links)
+)
 
 
-print("*"*40)
+
+print("*" * 40)
+
+#Save collected circular metadata into a CSV file
+output_file="data/metadata/public_admin_circulars.csv"
 
 #List to store the information collected from every circular
 all_circulars=[]
 
-for circular_url in circular_links:
+# Store URLs that could not be processed
+failed_circulars = []
 
-    #open the circular detail page
-    circular_response=requests.get(circular_url)
+for index, circular_url in enumerate(circular_links, start=1):
 
+    try:
+        # Open the circular detail page
+        circular_response = requests.get(
+            circular_url,
+            timeout=30
+        )
+
+        circular_response.raise_for_status()
+
+    except requests.RequestException as error:
+
+        print(
+            f"Failed {index}/{len(circular_links)}:",
+            circular_url
+        )
+
+        print("Reason:", error)
+
+        failed_circulars.append(circular_url)
+
+        # Skip this circular and continue with the next one
+        continue
     #convert the HTML into a BeautifulSoup object
     circular_soup=BeautifulSoup(circular_response.text,"html.parser")
 
@@ -161,6 +236,33 @@ for circular_url in circular_links:
     }
 
     all_circulars.append(circular_data)
+    # Show current progress
+    print(f"Processed {index}/{len(circular_links)}")
+
+    # Save collected records after every 50 processed pages
+    if index % 50 == 0:
+
+        with open(
+            output_file,
+            "w",
+            newline="",
+            encoding="utf-8-sig"
+        ) as file:
+
+            fieldnames = all_circulars[0].keys()
+
+            writer = csv.DictWriter(
+                file,
+                fieldnames=fieldnames
+            )
+
+            writer.writeheader()
+            writer.writerows(all_circulars)
+
+        print(
+            f"Checkpoint saved: {len(all_circulars)} records"
+        )
+    time.sleep(0.3)
 
 #count only circulars that contain all 3 languages
 complete_count=0
@@ -171,14 +273,15 @@ for circular in all_circulars:
 
 print("Total circulars:",len(all_circulars))
 print("Complete trilingual:",complete_count)
-print("Incomplete:",len(all_circulars)-complete_count)        
+print("Incomplete:",len(all_circulars)-complete_count)  
+print("Failed circulars:", len(failed_circulars))      
+
 #Display the first 3 structured records
 for circular in all_circulars[:3]:
 
     print(circular)
 
-#Save collected circular metadata into a CSV file
-output_file="data/metadata/public_admin_circulars.csv"
+
 
 with open(output_file,"w",newline="",encoding="utf-8-sig")as file:
     #Use dictonary keys as csv column names
@@ -191,4 +294,5 @@ with open(output_file,"w",newline="",encoding="utf-8-sig")as file:
     #Write all circular records
     writer.writerows(all_circulars)
 
-print(f"CSV saved as{output_file}")    
+print(f"CSV saved as : {output_file}")    
+
