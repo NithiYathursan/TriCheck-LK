@@ -43,13 +43,13 @@ https://pubad.gov.lk/web/index.php?lang=en&option=com_circular&view=circulars
 
 | Dataset Stage | Count |
 |---|---:|
-| Circular records collected | 2,109 |
-| Complete trilingual records | 2,069 |
-| NLP candidates | 2,010 |
-| Circulars entering full extraction | 2,008 |
-| Final complete trilingual circulars | 1,552 |
-| Final language documents | 4,656 |
-| Final multilingual chunks | 34,316 |
+| Circular records collected | 2109 |
+| Complete trilingual records | 2069 |
+| NLP candidates | 2010 |
+| Circulars entering full extraction | 2008 |
+| Final complete trilingual circulars | 1552 |
+| Final language documents | 4656 |
+| Final multilingual chunks | 34316 |
 
 ---
 
