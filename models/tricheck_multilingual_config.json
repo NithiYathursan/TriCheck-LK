@@ -1,0 +1,40 @@
+{
+    "embedding_model": "intfloat/multilingual-e5-small",
+    "languages": {
+        "English": {
+            "model": "HistGradientBoosting",
+            "threshold": 0.4,
+            "features": [
+                "target_similarity",
+                "reference_similarity",
+                "cross_language_gap",
+                "compression_count",
+                "local_drop",
+                "position_difference",
+                "compression_local_max"
+            ]
+        },
+        "Sinhala": {
+            "model": "SVM (RBF)",
+            "threshold": 0.4,
+            "features": [
+                "target_similarity",
+                "reference_similarity",
+                "cross_language_gap",
+                "compression_count",
+                "local_drop"
+            ]
+        },
+        "Tamil": {
+            "model": "Random Forest",
+            "threshold": 0.5,
+            "features": [
+                "target_similarity",
+                "reference_similarity",
+                "cross_language_gap",
+                "compression_count",
+                "local_drop"
+            ]
+        }
+    }
+}
