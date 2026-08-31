@@ -3,7 +3,7 @@ from collections import Counter
 
 
 input_file = (
-    "data/processed/extracted_documents.jsonl"
+    "data/processed/extracted_documents_full.jsonl"
 )
 
 records = []
@@ -205,5 +205,187 @@ for number, count in number_counts.items():
            
 print( "Total repeated circular numbers:", repeated_count)
 
-   
-   
+# Check actual duplicate circular IDs
+
+english_records = [
+    record
+    for record in records
+    if record["language"] == "English"
+]
+
+id_counts = Counter(
+    record["circular_id"]
+    for record in english_records
+)
+
+duplicate_ids = {
+    circular_id: count
+    for circular_id, count in id_counts.items()
+    if count > 1
+}
+
+print(
+    "\nDuplicate circular IDs:",
+    len(duplicate_ids)
+)
+
+for circular_id, count in duplicate_ids.items():
+    print(
+        circular_id,
+        "→",
+        count,
+        "records"
+    )
+
+# Check every circular has exactly 3 languages
+
+incomplete_groups = []
+
+for circular_id, circular_records in records_by_circular.items():
+
+    languages = {
+        record["language"]
+        for record in circular_records
+    }
+
+    if (
+        len(circular_records) != 3
+        or languages != {
+            "English",
+            "Sinhala",
+            "Tamil"
+        }
+    ):
+        incomplete_groups.append(
+            circular_id
+        )
+
+print(
+    "\nIncomplete trilingual groups:",
+    len(incomplete_groups)
+)
+
+
+# Final usable dataset summary
+
+
+usable_records = [
+    record
+    for record in records
+    if record["extraction_status"]
+    in ["DIRECT_TEXT", "OCR_TEXT"]
+    and len(record["text"].strip()) > 0
+]
+
+print(
+    "\nUsable document records:",
+    len(usable_records)
+)
+
+
+# Check completely usable trilingual circulars
+usable_by_circular = {}
+
+for record in usable_records:
+
+    circular_id = record["circular_id"]
+
+    if circular_id not in usable_by_circular:
+        usable_by_circular[circular_id] = []
+
+    usable_by_circular[circular_id].append(record)
+
+
+complete_usable_circulars = 0
+
+for circular_id, circular_records in usable_by_circular.items():
+
+    languages = {
+        record["language"]
+        for record in circular_records
+    }
+
+    if languages == {
+        "English",
+        "Sinhala",
+        "Tamil"
+    }:
+        complete_usable_circulars += 1
+
+
+print(
+    "Complete usable trilingual circulars:",
+    complete_usable_circulars
+)
+
+print(
+    "Complete usable documents:",
+    complete_usable_circulars * 3
+)   
+
+# Save only complete usable trilingual groups
+
+complete_usable_ids = set()
+
+for circular_id, circular_records in usable_by_circular.items():
+
+    languages = {
+        record["language"]
+        for record in circular_records
+    }
+
+    if languages == {
+        "English",
+        "Sinhala",
+        "Tamil"
+    }:
+        complete_usable_ids.add(
+            circular_id
+        )
+
+
+final_records = [
+    record
+    for record in usable_records
+    if record["circular_id"]
+    in complete_usable_ids
+]
+
+
+final_output_file = (
+    "data/processed/"
+    "extracted_documents_clean.jsonl"
+)
+
+
+with open(
+    final_output_file,
+    "w",
+    encoding="utf-8"
+) as file:
+
+    for record in final_records:
+
+        file.write(
+            json.dumps(
+                record,
+                ensure_ascii=False
+            )
+            + "\n"
+        )
+
+
+print(
+    "\nFinal clean records:",
+    len(final_records)
+)
+
+print(
+    "Final clean circulars:",
+    len(complete_usable_ids)
+)
+
+print(
+    "Saved to:",
+    final_output_file
+)

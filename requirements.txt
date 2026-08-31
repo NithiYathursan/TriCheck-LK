@@ -1,3 +1,10 @@
-requests
-beautifulsoup4
+streamlit
+numpy
 pandas
+joblib
+scikit-learn==1.8.0
+sentence-transformers
+PyMuPDF
+pytesseract
+Pillow
+requests
