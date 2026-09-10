@@ -13,6 +13,8 @@ import streamlit as st
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
+
+
 # PAGE CONFIGURATION
 
 st.set_page_config(
