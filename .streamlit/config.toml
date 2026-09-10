@@ -1,14 +1,30 @@
-[theme.light]
+[theme]
+base = "light"
+font = "sans-serif"
+
+# =========================
+# LIGHT THEME
+# =========================
+
 primaryColor = "#2563EB"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F3F6FA"
-textColor = "#111827"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#E2E8F0"
+textColor = "#0F172A"
+borderColor = "#94A3B8"
+showWidgetBorder = true
+
+
+# =========================
+# DARK THEME
+# =========================
 
 [theme.dark]
 primaryColor = "#60A5FA"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#FAFAFA"
+backgroundColor = "#111827"
+secondaryBackgroundColor = "#1F2937"
+textColor = "#F1F5F9"
+borderColor = "#475569"
+showWidgetBorder = true
 
 [client]
 toolbarMode = "developer"
