@@ -1,11 +1,8 @@
-
-# TriCheck-LK
-# Cross-Lingual Semantic Consistency and Missing-Information Detection
-
 from pathlib import Path
 import io
 import json
 import re
+import shutil
 import unicodedata
 import joblib
 import numpy as np
@@ -13,77 +10,140 @@ import pandas as pd
 import pymupdf
 import pytesseract
 import streamlit as st
-
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
-# PAGE / PATH CONFIGURATION
+# PAGE CONFIGURATION
 
 st.set_page_config(
     page_title="TriCheck-LK",
     page_icon="🔎",
     layout="wide"
 )
-
+# PROJECT PATHS
 PROJECT_ROOT = Path(__file__).resolve().parent
+
 MODEL_DIR = PROJECT_ROOT / "models"
 
 # TESSERACT CONFIGURATION
 
-pytesseract.pytesseract.tesseract_cmd = (
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+def configure_tesseract():
+
+    # First check system PATH.
+    tesseract_path = shutil.which(
+        "tesseract"
+    )
+
+    if tesseract_path:
+
+        pytesseract.pytesseract.tesseract_cmd = (
+            tesseract_path
+        )
+
+        return True
+
+
+    # Common Windows installation path.
+    windows_path = Path(
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    )
+
+
+    if windows_path.exists():
+
+        pytesseract.pytesseract.tesseract_cmd = (
+            str(
+                windows_path
+            )
+        )
+
+        return True
+
+
+    return False
+
+
+TESSERACT_AVAILABLE = (
+    configure_tesseract()
 )
 
 # GENERAL CONFIGURATION
 
-
 MIN_TEXT_CHARS = 500
+
 MAX_CHUNK_CHARS = 1000
 
+
 LANGUAGE_OCR_CODES = {
-    "English": "eng",
-    "Sinhala": "sin",
-    "Tamil": "tam",
+
+    "English":
+        "eng",
+
+    "Sinhala":
+        "sin",
+
+    "Tamil":
+        "tam",
 }
+
 
 LANGUAGE_CONFIGS = {
+
     "English": {
-        "anchor": "Sinhala",
-        "reference": "Tamil"
+        "anchor":
+            "Sinhala",
+
+        "reference":
+            "Tamil",
     },
+
 
     "Sinhala": {
-        "anchor": "English",
-        "reference": "Tamil"
+        "anchor":
+            "English",
+
+        "reference":
+            "Tamil",
     },
 
+
     "Tamil": {
-        "anchor": "English",
-        "reference": "Sinhala"
+        "anchor":
+            "English",
+
+        "reference":
+            "Sinhala",
     },
 }
 
-# LOAD MODELS
+
+# LOAD MODELS AND EMBEDDING MODEL
 
 
 @st.cache_resource
 def load_resources():
 
     detectors = {
-        "English": joblib.load(
-            MODEL_DIR
-            / "tricheck_english_detector.joblib"
-        ),
 
-        "Sinhala": joblib.load(
-            MODEL_DIR
-            / "tricheck_sinhala_detector.joblib"
-        ),
+        "English":
+            joblib.load(
+                MODEL_DIR
+                / "tricheck_english_detector.joblib"
+            ),
 
-        "Tamil": joblib.load(
-            MODEL_DIR
-            / "tricheck_tamil_detector.joblib"
-        ),
+
+        "Sinhala":
+            joblib.load(
+                MODEL_DIR
+                / "tricheck_sinhala_detector.joblib"
+            ),
+
+
+        "Tamil":
+            joblib.load(
+                MODEL_DIR
+                / "tricheck_tamil_detector.joblib"
+            ),
     }
 
 
@@ -94,15 +154,19 @@ def load_resources():
         encoding="utf-8"
     ) as file:
 
-        model_config = json.load(
-            file
+        model_config = (
+            json.load(
+                file
+            )
         )
 
 
-    embedding_model = SentenceTransformer(
-        model_config[
-            "embedding_model"
-        ]
+    embedding_model = (
+        SentenceTransformer(
+            model_config[
+                "embedding_model"
+            ]
+        )
     )
 
 
@@ -113,14 +177,14 @@ def load_resources():
     )
 
 
-detectors, model_config, embedding_model = (
-    load_resources()
-)
-
+(
+    detectors,
+    model_config,
+    embedding_model
+) = load_resources()
 
 # TEXT CLEANING
 # Same preprocessing used during model development
-
 
 def clean_text(text):
 
@@ -129,50 +193,44 @@ def clean_text(text):
     )
 
 
-    # Unicode normalization
     text = unicodedata.normalize(
         "NFC",
         text
     )
-
-
-    # Keep newline, tab, ZWNJ and ZWJ
+    # Remove control characters but preserve:
+    # newline, tab, ZWNJ and ZWJ.
     text = "".join(
         char
+
         for char in text
+
         if (
-            unicodedata.category(char)[0]
+            unicodedata.category(
+                char
+            )[0]
             != "C"
-            or char in "\n\t\u200c\u200d"
+
+            or char
+            in "\n\t\u200c\u200d"
         )
     )
-
-
-    # Tabs -> spaces
     text = text.replace(
         "\t",
         " "
     )
-
-
-    # Collapse repeated spaces
     text = re.sub(
         r"[ ]+",
         " ",
         text
     )
-
-
-    # Collapse excessive blank lines
     text = re.sub(
         r"\n\s*\n+",
         "\n",
         text
     )
-
-
-    return text.strip()
-
+    return (
+        text.strip()
+    )
 
 
 # DIRECT PDF TEXT EXTRACTION
@@ -234,7 +292,7 @@ def extract_direct_text(
 
 
         return (
-            extracted_text,
+            "",
             "EMPTY"
         )
 
@@ -246,16 +304,124 @@ def extract_direct_text(
             error
         )
 
+
         return (
             "",
             "ERROR"
         )
 
+
+# LANGUAGE SCRIPT DETECTION
+
+def detect_text_language(
+    text
+):
+
+    english_count = 0
+
+    sinhala_count = 0
+
+    tamil_count = 0
+
+
+    for char in str(
+        text
+    ):
+
+        code = ord(
+            char
+        )
+
+
+        # English / Latin letters
+        if (
+            "A" <= char <= "Z"
+            or
+            "a" <= char <= "z"
+        ):
+
+            english_count += 1
+
+
+        # Sinhala Unicode range
+        elif (
+            0x0D80
+            <= code
+            <= 0x0DFF
+        ):
+
+            sinhala_count += 1
+
+
+        # Tamil Unicode range
+        elif (
+            0x0B80
+            <= code
+            <= 0x0BFF
+        ):
+
+            tamil_count += 1
+
+
+    counts = {
+
+        "English":
+            english_count,
+
+        "Sinhala":
+            sinhala_count,
+
+        "Tamil":
+            tamil_count,
+    }
+
+
+    total_letters = sum(
+        counts.values()
+    )
+
+
+    if (
+        total_letters
+        == 0
+    ):
+
+        return "Unknown"
+
+
+    detected_language = max(
+        counts,
+        key=counts.get
+    )
+
+
+    dominance = (
+        counts[
+            detected_language
+        ]
+        / total_letters
+    )
+
+
+    # Avoid guessing if scripts are strongly mixed.
+    if (
+        dominance
+        < 0.60
+    ):
+
+        return "Unknown"
+
+
+    return detected_language
+
+
 # OCR EXTRACTION
 
 def extract_ocr_text(
     pdf_bytes,
-    language
+    language,
+    max_pages=None,
+    dpi=300
 ):
 
     try:
@@ -276,11 +442,37 @@ def extract_ocr_text(
         )
 
 
-        for page in document:
+        page_count = len(
+            document
+        )
 
-            # Same 300 DPI used during dataset extraction
-            pixmap = page.get_pixmap(
-                dpi=300
+
+        if (
+            max_pages
+            is not None
+        ):
+
+            page_count = min(
+                page_count,
+                max_pages
+            )
+
+
+        for page_index in range(
+            page_count
+        ):
+
+            page = (
+                document[
+                    page_index
+                ]
+            )
+
+
+            pixmap = (
+                page.get_pixmap(
+                    dpi=dpi
+                )
             )
 
 
@@ -291,15 +483,18 @@ def extract_ocr_text(
             )
 
 
-            image = Image.open(
-                io.BytesIO(
-                    image_bytes
+            image = (
+                Image.open(
+                    io.BytesIO(
+                        image_bytes
+                    )
                 )
             )
 
 
             page_text = (
-                pytesseract.image_to_string(
+                pytesseract
+                .image_to_string(
                     image,
                     lang=language_code,
                     config="--oem 3 --psm 3"
@@ -307,7 +502,10 @@ def extract_ocr_text(
             )
 
 
-            ocr_text += page_text
+            ocr_text += (
+                page_text
+            )
+
             ocr_text += "\n"
 
 
@@ -326,9 +524,124 @@ def extract_ocr_text(
             error
         )
 
+
         return ""
 
+
+# OCR-BASED LANGUAGE DETECTION
+# Used for scanned / weak-text PDFs
+
+def detect_language_with_ocr(
+    pdf_bytes
+):
+
+    if not TESSERACT_AVAILABLE:
+
+        return "Unknown"
+
+
+    try:
+
+        document = pymupdf.open(
+            stream=pdf_bytes,
+            filetype="pdf"
+        )
+
+
+        detected_text = ""
+
+
+        # First two pages are normally enough
+        # for language validation.
+        page_count = min(
+            len(document),
+            2
+        )
+
+
+        for page_index in range(
+            page_count
+        ):
+
+            page = (
+                document[
+                    page_index
+                ]
+            )
+
+
+            pixmap = (
+                page.get_pixmap(
+                    dpi=200
+                )
+            )
+
+
+            image_bytes = (
+                pixmap.tobytes(
+                    "png"
+                )
+            )
+
+
+            image = (
+                Image.open(
+                    io.BytesIO(
+                        image_bytes
+                    )
+                )
+            )
+
+
+            # Multilingual OCR is independent
+            # of the uploader selected by the user.
+            page_text = (
+                pytesseract
+                .image_to_string(
+                    image,
+                    lang="eng+sin+tam",
+                    config="--oem 3 --psm 3"
+                )
+            )
+
+
+            detected_text += (
+                page_text
+            )
+
+            detected_text += "\n"
+
+
+        document.close()
+
+
+        if not (
+            detected_text.strip()
+        ):
+
+            return "Unknown"
+
+
+        return (
+            detect_text_language(
+                detected_text
+            )
+        )
+
+
+    except Exception as error:
+
+        print(
+            "Language detection OCR error:",
+            error
+        )
+
+
+        return "Unknown"
+
+
 # HYBRID PDF EXTRACTION
+
 
 def extract_pdf_text(
     uploaded_file,
@@ -338,15 +651,201 @@ def extract_pdf_text(
     pdf_bytes = (
         uploaded_file.getvalue()
     )
+    # STEP 1 - DIRECT EXTRACTION
 
-
-    # First try direct extraction
     raw_text, status = (
         extract_direct_text(
             pdf_bytes
         )
     )
 
+
+    if (
+        status
+        == "ERROR"
+    ):
+
+        return {
+            "text":
+                "",
+
+            "method":
+                "ERROR",
+
+            "raw_characters":
+                0,
+
+            "characters":
+                0,
+
+            "detected_language":
+                "Unknown",
+        }
+
+
+    direct_detected_language = (
+
+        detect_text_language(
+            raw_text
+        )
+
+        if raw_text.strip()
+
+        else "Unknown"
+    )
+    # STEP 2 - INDEPENDENT LANGUAGE VALIDATION
+
+    if (
+        direct_detected_language
+        == "Unknown"
+    ):
+
+        detected_language = (
+            detect_language_with_ocr(
+                pdf_bytes
+            )
+        )
+
+
+    else:
+
+        detected_language = (
+            direct_detected_language
+        )
+
+    # WRONG UPLOAD SLOT
+
+    if (
+        detected_language
+        != "Unknown"
+
+        and
+
+        detected_language
+        != language
+    ):
+
+        cleaned_direct_text = (
+            clean_text(
+                raw_text
+            )
+        )
+
+
+        return {
+
+            "text":
+                cleaned_direct_text,
+
+            "method":
+                "LANGUAGE_MISMATCH",
+
+            "raw_characters":
+                len(
+                    raw_text
+                ),
+
+            "characters":
+                len(
+                    cleaned_direct_text
+                ),
+
+            "detected_language":
+                detected_language,
+        }
+
+
+    # LANGUAGE COULD NOT BE VERIFIED
+
+    if (
+        detected_language
+        == "Unknown"
+    ):
+
+        cleaned_direct_text = (
+            clean_text(
+                raw_text
+            )
+        )
+
+
+        return {
+
+            "text":
+                cleaned_direct_text,
+
+            "method":
+                "UNVERIFIED_LANGUAGE",
+
+            "raw_characters":
+                len(
+                    raw_text
+                ),
+
+            "characters":
+                len(
+                    cleaned_direct_text
+                ),
+
+            "detected_language":
+                "Unknown",
+        }
+
+    # STEP 3 - TAMIL OCR PREFERENCE
+    # Some Tamil government PDFs contain broken
+    # embedded-font mappings.
+    # Language validation has already happened above,
+    # so OCR here is used only for readable analysis text.
+    
+
+    if (
+        language
+        == "Tamil"
+    ):
+
+        raw_ocr_text = (
+            extract_ocr_text(
+                pdf_bytes,
+                "Tamil"
+            )
+        )
+
+
+        cleaned_ocr_text = (
+            clean_text(
+                raw_ocr_text
+            )
+        )
+
+
+        if (
+            len(raw_ocr_text)
+            >= MIN_TEXT_CHARS
+        ):
+
+            return {
+
+                "text":
+                    cleaned_ocr_text,
+
+                "method":
+                    "OCR_TEXT",
+
+                "raw_characters":
+                    len(
+                        raw_ocr_text
+                    ),
+
+                "characters":
+                    len(
+                        cleaned_ocr_text
+                    ),
+
+                "detected_language":
+                    detected_language,
+            }
+
+    # STEP 4 - NORMAL DIRECT TEXT
 
     if (
         status
@@ -361,6 +860,7 @@ def extract_pdf_text(
 
 
         return {
+
             "text":
                 cleaned_text,
 
@@ -368,14 +868,22 @@ def extract_pdf_text(
                 "DIRECT_TEXT",
 
             "raw_characters":
-                len(raw_text),
+                len(
+                    raw_text
+                ),
 
             "characters":
-                len(cleaned_text),
+                len(
+                    cleaned_text
+                ),
+
+            "detected_language":
+                detected_language,
         }
 
 
-    # OCR fallback
+    # STEP 5 - OCR FALLBACK
+
     if status in {
         "LOW_TEXT",
         "EMPTY"
@@ -397,16 +905,22 @@ def extract_pdf_text(
 
 
         final_status = (
+
             "OCR_TEXT"
+
             if (
                 len(raw_ocr_text)
                 >= MIN_TEXT_CHARS
             )
-            else "UNUSABLE"
+
+            else
+
+            "UNUSABLE"
         )
 
 
         return {
+
             "text":
                 cleaned_ocr_text,
 
@@ -414,18 +928,36 @@ def extract_pdf_text(
                 final_status,
 
             "raw_characters":
-                len(raw_ocr_text),
+                len(
+                    raw_ocr_text
+                ),
 
             "characters":
-                len(cleaned_ocr_text),
+                len(
+                    cleaned_ocr_text
+                ),
+
+            "detected_language":
+                detected_language,
         }
 
 
     return {
-        "text": "",
-        "method": "ERROR",
-        "raw_characters": 0,
-        "characters": 0,
+
+        "text":
+            "",
+
+        "method":
+            "ERROR",
+
+        "raw_characters":
+            0,
+
+        "characters":
+            0,
+
+        "detected_language":
+            "Unknown",
     }
 
 # TEXT CHUNKING
@@ -436,8 +968,6 @@ def create_chunks(
     max_chars=MAX_CHUNK_CHARS
 ):
 
-    # Convert repeated whitespace and line breaks
-    # into normal spaces
     text = re.sub(
         r"\s+",
         " ",
@@ -445,13 +975,11 @@ def create_chunks(
     ).strip()
 
 
-    # Sentence splitting
     raw_sentences = re.split(
         r"(?<=[.!?])\s+",
         text
     )
 
-    # Join standalone section numbers
 
     sentences = []
 
@@ -460,7 +988,9 @@ def create_chunks(
 
     while (
         index
-        < len(raw_sentences)
+        < len(
+            raw_sentences
+        )
     ):
 
         current = (
@@ -476,9 +1006,13 @@ def create_chunks(
                 r"\d+(?:\.\d+)*\.",
                 current
             )
+
             and
+
             index + 1
-            < len(raw_sentences)
+            < len(
+                raw_sentences
+            )
         ):
 
             next_sentence = (
@@ -510,7 +1044,6 @@ def create_chunks(
 
             index += 1
 
-    # Build chunks
 
     chunks = []
 
@@ -529,13 +1062,15 @@ def create_chunks(
             continue
 
 
-        # Long OCR/punctuation-less sentence
+        # Handle unusually long OCR sentences.
         if (
             len(sentence)
             > max_chars
         ):
 
-            for word in sentence.split():
+            for word in (
+                sentence.split()
+            ):
 
                 if (
                     len(current_chunk)
@@ -549,7 +1084,9 @@ def create_chunks(
                         current_chunk += " "
 
 
-                    current_chunk += word
+                    current_chunk += (
+                        word
+                    )
 
 
                 else:
@@ -561,13 +1098,14 @@ def create_chunks(
                         )
 
 
-                    current_chunk = word
+                    current_chunk = (
+                        word
+                    )
 
 
             continue
 
 
-        # Normal sentence
         if (
             len(current_chunk)
             + len(sentence)
@@ -580,7 +1118,9 @@ def create_chunks(
                 current_chunk += " "
 
 
-            current_chunk += sentence
+            current_chunk += (
+                sentence
+            )
 
 
         else:
@@ -592,7 +1132,9 @@ def create_chunks(
                 )
 
 
-            current_chunk = sentence
+            current_chunk = (
+                sentence
+            )
 
 
     if current_chunk:
@@ -604,64 +1146,8 @@ def create_chunks(
 
     return chunks
 
-# LANGUAGE SCRIPT VALIDATION
-
-def detect_text_language(text):
-
-    english_count = 0
-    sinhala_count = 0
-    tamil_count = 0
-
-    for char in text:
-
-        code = ord(char)
-
-        # English / Latin letters
-        if (
-            "A" <= char <= "Z"
-            or "a" <= char <= "z"
-        ):
-            english_count += 1
-
-        # Sinhala Unicode range
-        elif 0x0D80 <= code <= 0x0DFF:
-            sinhala_count += 1
-
-        # Tamil Unicode range
-        elif 0x0B80 <= code <= 0x0BFF:
-            tamil_count += 1
-
-
-    counts = {
-        "English": english_count,
-        "Sinhala": sinhala_count,
-        "Tamil": tamil_count
-    }
-
-    detected_language = max(
-        counts,
-        key=counts.get
-    )
-
-    total_letters = sum(
-        counts.values()
-    )
-
-    if total_letters == 0:
-        return "Unknown"
-
-    dominance = (
-        counts[detected_language]
-        / total_letters
-    )
-
-    if dominance < 0.60:
-        return "Unknown"
-
-    return detected_language
 
 # DOCUMENT VALIDATION
-
 
 def validate_document(
     result,
@@ -669,73 +1155,139 @@ def validate_document(
     language
 ):
 
-
-    # Extraction error
-
-    if result["method"] == "ERROR":
+    if (
+        result[
+            "method"
+        ]
+        == "ERROR"
+    ):
 
         return (
             False,
             f"{language} PDF could not be processed."
         )
 
-    # Insufficient OCR/direct text
 
-
-    if result["method"] == "UNUSABLE":
-
-        return (
-            False,
-            f"{language} PDF does not contain enough "
-            "usable text for analysis."
+    detected_language = (
+        result.get(
+            "detected_language",
+            "Unknown"
         )
-
-    # Empty text
-
-    if not result["text"].strip():
-
-        return (
-            False,
-            f"No usable text was extracted from the "
-            f"{language} PDF."
-        )
-
-    # No chunks
-
-    if len(chunks) == 0:
-
-        return (
-            False,
-            f"No text chunks could be created from the "
-            f"{language} PDF."
-        )
-
-    # Language-slot validation
-
-    detected_language = detect_text_language(
-        result["text"]
     )
 
 
+    # Wrong language uploaded into the slot.
     if (
-        detected_language != "Unknown"
-        and
-        detected_language != language
+        result[
+            "method"
+        ]
+        == "LANGUAGE_MISMATCH"
+
+        or
+
+        (
+            detected_language
+            != "Unknown"
+
+            and
+
+            detected_language
+            != language
+        )
     ):
 
         return (
+
             False,
+
             f"The file uploaded in the {language} section "
             f"appears to be a {detected_language} document. "
             f"Please upload the correct {language} version."
         )
 
-    # Document is valid
+
+    # Blank or unusable unverified file.
+    if (
+        result[
+            "method"
+        ]
+        == "UNUSABLE"
+
+        or
+
+        (
+            result[
+                "method"
+            ]
+            == "UNVERIFIED_LANGUAGE"
+
+            and
+
+            not result[
+                "text"
+            ].strip()
+        )
+    ):
+
+        return (
+
+            False,
+
+            f"{language} PDF does not contain enough "
+            "usable text for analysis."
+        )
+
+
+    # Non-empty document but script could not be verified.
+    if (
+        detected_language
+        == "Unknown"
+    ):
+
+        return (
+
+            False,
+
+            f"The language of the file uploaded in the "
+            f"{language} section could not be verified. "
+            f"Please upload a clear {language} version."
+        )
+
+
+    if not (
+        result[
+            "text"
+        ].strip()
+    ):
+
+        return (
+
+            False,
+
+            f"No usable text was extracted from the "
+            f"{language} PDF."
+        )
+
+
+    if (
+        len(chunks)
+        == 0
+    ):
+
+        return (
+
+            False,
+
+            f"No text chunks could be created from the "
+            f"{language} PDF."
+        )
+
 
     return (
         True,
         ""
     )
+
 
 # MULTILINGUAL EMBEDDINGS
 
@@ -745,21 +1297,26 @@ def create_embeddings(
 ):
 
     model_inputs = [
-        "query: " + chunk
-        for chunk in chunks
+
+        "query: "
+        + chunk
+
+        for chunk
+        in chunks
     ]
 
 
-    embeddings = model.encode(
-        model_inputs,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=False
+    embeddings = (
+        model.encode(
+            model_inputs,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False
+        )
     )
 
 
     return embeddings
-
 
 # DTW SEMANTIC ALIGNMENT
 
@@ -768,11 +1325,11 @@ def dtw_align(
     target_embeddings
 ):
 
-    # Embeddings are normalized.
-    # Dot product therefore gives cosine similarity.
-    similarity_matrix = np.matmul(
-        source_embeddings,
-        target_embeddings.T
+    similarity_matrix = (
+        np.matmul(
+            source_embeddings,
+            target_embeddings.T
+        )
     )
 
 
@@ -783,11 +1340,16 @@ def dtw_align(
 
 
     source_count = (
-        cost_matrix.shape[0]
+        cost_matrix.shape[
+            0
+        ]
     )
 
+
     target_count = (
-        cost_matrix.shape[1]
+        cost_matrix.shape[
+            1
+        ]
     )
 
 
@@ -805,7 +1367,6 @@ def dtw_align(
         0
     ] = 0.0
 
-    # Fill DTW table
 
     for i in range(
         1,
@@ -821,12 +1382,16 @@ def dtw_align(
                 i,
                 j
             ] = (
+
                 cost_matrix[
                     i - 1,
                     j - 1
                 ]
+
                 +
+
                 min(
+
                     dtw[
                         i - 1,
                         j
@@ -845,8 +1410,6 @@ def dtw_align(
             )
 
 
-    # Backtrack
-
     i = source_count
 
     j = target_count
@@ -864,6 +1427,7 @@ def dtw_align(
             (
                 i - 1,
                 j - 1,
+
                 float(
                     similarity_matrix[
                         i - 1,
@@ -875,6 +1439,7 @@ def dtw_align(
 
 
         previous_costs = [
+
             dtw[
                 i - 1,
                 j - 1
@@ -888,7 +1453,7 @@ def dtw_align(
             dtw[
                 i,
                 j - 1
-            ]
+            ],
         ]
 
 
@@ -899,13 +1464,20 @@ def dtw_align(
         )
 
 
-        if move == 0:
+        if (
+            move
+            == 0
+        ):
 
             i -= 1
+
             j -= 1
 
 
-        elif move == 1:
+        elif (
+            move
+            == 1
+        ):
 
             i -= 1
 
@@ -915,7 +1487,6 @@ def dtw_align(
             j -= 1
 
 
-    # Remaining source positions
     while (
         i > 0
     ):
@@ -924,6 +1495,7 @@ def dtw_align(
             (
                 i - 1,
                 0,
+
                 float(
                     similarity_matrix[
                         i - 1,
@@ -937,7 +1509,6 @@ def dtw_align(
         i -= 1
 
 
-    # Remaining target positions
     while (
         j > 0
     ):
@@ -946,6 +1517,7 @@ def dtw_align(
             (
                 0,
                 j - 1,
+
                 float(
                     similarity_matrix[
                         0,
@@ -969,6 +1541,7 @@ def dtw_align(
 
 # SOURCE COVERAGE
 
+
 def get_source_coverage(
     path,
     similarity_matrix,
@@ -976,7 +1549,10 @@ def get_source_coverage(
 ):
 
     coverage = {
-        i: []
+
+        i:
+            []
+
         for i in range(
             source_count
         )
@@ -1021,7 +1597,9 @@ def get_source_coverage(
         if scores:
 
             best_scores.append(
-                max(scores)
+                max(
+                    scores
+                )
             )
 
 
@@ -1033,7 +1611,6 @@ def get_source_coverage(
 
 
     return best_scores
-
 
 # ALIGNMENT PATH DATAFRAME
 
@@ -1052,6 +1629,7 @@ def create_path_dataframe(
 
         rows.append(
             {
+
                 "source_position":
                     source_pos,
 
@@ -1072,13 +1650,14 @@ def create_path_dataframe(
         )
 
 
-    return pd.DataFrame(
-        rows
+    return (
+        pd.DataFrame(
+            rows
+        )
     )
 
 
 # ALIGNMENT COMPRESSION FEATURE
-
 
 def add_compression_feature(
     path_df
@@ -1111,9 +1690,7 @@ def add_compression_feature(
 
     return result
 
-
-# REAL-DOCUMENT FEATURE GENERATION
-
+# REAL DOCUMENT FEATURE GENERATION
 
 def build_document_features(
     prepared,
@@ -1144,45 +1721,54 @@ def build_document_features(
     anchor_chunks = (
         prepared[
             anchor_language
-        ]["chunks"]
+        ][
+            "chunks"
+        ]
     )
 
 
     target_chunks = (
         prepared[
             target_language
-        ]["chunks"]
+        ][
+            "chunks"
+        ]
     )
 
 
     anchor_embeddings = (
         prepared[
             anchor_language
-        ]["embeddings"]
+        ][
+            "embeddings"
+        ]
     )
 
 
     target_embeddings = (
         prepared[
             target_language
-        ]["embeddings"]
+        ][
+            "embeddings"
+        ]
     )
 
 
     reference_embeddings = (
         prepared[
             reference_language
-        ]["embeddings"]
+        ][
+            "embeddings"
+        ]
     )
 
-    # Anchor <-> target alignment
 
-    target_path, _ = dtw_align(
-        anchor_embeddings,
-        target_embeddings
+    target_path, _ = (
+        dtw_align(
+            anchor_embeddings,
+            target_embeddings
+        )
     )
-
-    # Anchor <-> reference alignment
 
 
     (
@@ -1204,7 +1790,6 @@ def build_document_features(
         )
     )
 
-    # Alignment path features
 
     path_df = (
         create_path_dataframe(
@@ -1219,17 +1804,20 @@ def build_document_features(
         )
     )
 
-    # Position difference
 
     source_max = max(
-        len(anchor_chunks)
+        len(
+            anchor_chunks
+        )
         - 1,
         1
     )
 
 
     target_max = max(
-        len(target_chunks)
+        len(
+            target_chunks
+        )
         - 1,
         1
     )
@@ -1238,13 +1826,16 @@ def build_document_features(
     path_df[
         "position_difference"
     ] = abs(
+
         (
             path_df[
                 "source_position"
             ]
             / source_max
         )
+
         -
+
         (
             path_df[
                 "target_position"
@@ -1253,8 +1844,6 @@ def build_document_features(
         )
     )
 
-    # Aggregate target features
-  
 
     target_features = (
         path_df
@@ -1262,6 +1851,7 @@ def build_document_features(
             "source_chunk"
         )
         .agg(
+
             target_similarity=(
                 "similarity",
                 "max"
@@ -1280,12 +1870,11 @@ def build_document_features(
         .reset_index()
     )
 
-    # Reference-language similarity
-  
 
     reference_features = (
         pd.DataFrame(
             {
+
                 "source_chunk":
                     list(
                         range(
@@ -1317,8 +1906,6 @@ def build_document_features(
         )
     )
 
-    # Local compression
-   
 
     feature_df[
         "compression_local_max"
@@ -1335,26 +1922,21 @@ def build_document_features(
     )
 
 
-    
-    # Cross-language disagreement
-   
-
     feature_df[
         "cross_language_gap"
     ] = (
+
         feature_df[
             "reference_similarity"
         ]
+
         -
+
         feature_df[
             "target_similarity"
         ]
     )
 
-
-    
-    # Local semantic anomaly
-   
 
     feature_df[
         "local_median"
@@ -1374,19 +1956,18 @@ def build_document_features(
     feature_df[
         "local_drop"
     ] = (
+
         feature_df[
             "local_median"
         ]
+
         -
+
         feature_df[
             "target_similarity"
         ]
     )
 
-
-   
-    # Best target chunk for side-by-side display
-   
 
     best_target_mapping = (
         path_df
@@ -1435,7 +2016,6 @@ def build_document_features(
 
 # LANGUAGE-SPECIFIC MODEL PREDICTION
 
-
 def predict_missing_information(
     feature_df,
     language
@@ -1464,7 +2044,6 @@ def predict_missing_information(
     )
 
 
-    # Exact training feature order
     X = (
         feature_df[
             feature_columns
@@ -1473,7 +2052,6 @@ def predict_missing_information(
     )
 
 
-    # Safety check
     if (
         X.isna()
         .any()
@@ -1481,8 +2059,7 @@ def predict_missing_information(
     ):
 
         raise ValueError(
-            f"{language} features "
-            "contain missing values."
+            f"{language} features contain missing values."
         )
 
 
@@ -1527,10 +2104,7 @@ def predict_missing_information(
         threshold
     )
 
-
-
-# FLAGGED SECTION DISPLAY
-
+# DISPLAY FLAGGED SECTIONS
 
 def display_flagged_sections(
     analysis_df,
@@ -1570,8 +2144,7 @@ def display_flagged_sections(
 
 
     st.markdown(
-        f"### {target_language} - "
-        "Sections to Review"
+        f"### {target_language} - Sections to Review"
     )
 
 
@@ -1624,8 +2197,7 @@ def display_flagged_sections(
             with left_col:
 
                 st.markdown(
-                    f"**{anchor_language} "
-                    "reference section**"
+                    f"**{anchor_language} reference section**"
                 )
 
 
@@ -1643,8 +2215,7 @@ def display_flagged_sections(
             with right_col:
 
                 st.markdown(
-                    f"**{target_language} "
-                    "matched section**"
+                    f"**{target_language} matched section**"
                 )
 
 
@@ -1679,19 +2250,32 @@ def display_flagged_sections(
                     )
 
 
-
 # MAIN APPLICATION UI
 
-
 st.title(
-    "🔎 TriCheck-LK"
+    "🔎 TriCheck-LK",
+    anchor=False
 )
+
+
+if not TESSERACT_AVAILABLE:
+
+    st.warning(
+        "Tesseract OCR was not found. Direct-text PDFs can "
+        "still be processed, but scanned PDFs and Tamil OCR "
+        "may not work. Install Tesseract with eng, sin and "
+        "tam language packs or add Tesseract to PATH."
+    )
 
 # UPLOAD RESET STATE
 
+if (
+    "upload_version"
+    not in st.session_state
+):
 
-if "upload_version" not in st.session_state:
     st.session_state.upload_version = 0
+
 
 st.write(
     "Upload the English, Sinhala and Tamil versions "
@@ -1700,85 +2284,133 @@ st.write(
 )
 
 
-col1, col2, col3 = (
-    st.columns(
-        3
-    )
+col1, col2, col3 = st.columns(
+    3
 )
 
 
 with col1:
 
-    english_file = (
-        st.file_uploader(
-            "English PDF",
-            type=["pdf"],
-            key=f"english_pdf_{st.session_state.upload_version}"
-        )
+    st.markdown(
+        "**English PDF**"
     )
+
+    with st.container(
+        border=True
+    ):
+
+        english_file = (
+            st.file_uploader(
+                "Upload English PDF",
+                type=["pdf"],
+                label_visibility="collapsed",
+                key=(
+                    f"english_pdf_"
+                    f"{st.session_state.upload_version}"
+                )
+            )
+        )
 
 
 with col2:
 
-    sinhala_file = (
-        st.file_uploader(
-            "Sinhala PDF",
-            type=["pdf"],
-            key=f"sinhala_pdf_{st.session_state.upload_version}"
-        )
+    st.markdown(
+        "**Sinhala PDF**"
     )
+
+    with st.container(
+        border=True
+    ):
+
+        sinhala_file = (
+            st.file_uploader(
+                "Upload Sinhala PDF",
+                type=["pdf"],
+                label_visibility="collapsed",
+                key=(
+                    f"sinhala_pdf_"
+                    f"{st.session_state.upload_version}"
+                )
+            )
+        )
 
 
 with col3:
 
-    tamil_file = (
-        st.file_uploader(
-            "Tamil PDF",
-            type=["pdf"],
-            key=f"tamil_pdf_{st.session_state.upload_version}"
-        )
+    st.markdown(
+        "**Tamil PDF**"
     )
 
+    with st.container(
+        border=True
+    ):
+
+        tamil_file = (
+            st.file_uploader(
+                "Upload Tamil PDF",
+                type=["pdf"],
+                label_visibility="collapsed",
+                key=(
+                    f"tamil_pdf_"
+                    f"{st.session_state.upload_version}"
+                )
+            )
+        )
 
 all_files_uploaded = (
+
     english_file
     is not None
+
     and
+
     sinhala_file
     is not None
+
     and
+
     tamil_file
     is not None
 )
 
 
-if not all_files_uploaded:
+if not (
+    all_files_uploaded
+):
 
     st.info(
         "Please upload all three corresponding "
         "language versions."
     )
 
-button_col1, button_col2 = st.columns(
-    [1, 1]
+
+button_col1, button_col2 = (
+    st.columns(
+        [1, 1]
+    )
 )
 
 
 with button_col1:
 
-    check_button = st.button(
-        "Check Documents",
-        type="primary",
-        disabled=not all_files_uploaded,
-        use_container_width=True
+    check_button = (
+        st.button(
+            "Check Documents",
+            type="primary",
+            disabled=not all_files_uploaded,
+            use_container_width=True
+        )
     )
 
 
 with button_col2:
 
-    reset_button = st.button(
-        "Reset Documents",
-        use_container_width=True
+    reset_button = (
+        st.button(
+            "Reset Documents",
+            type="secondary",
+            use_container_width=True
+        )
     )
 
 
@@ -1788,14 +2420,12 @@ if reset_button:
 
     st.rerun()
 
-# CHECK DOCUMENTS
 
+# CHECK DOCUMENTS
 
 if check_button:
 
-    
     # STEP 1 - PREPARE DOCUMENTS
-    
 
     with st.spinner(
         "Preparing the three documents..."
@@ -1851,41 +2481,47 @@ if check_button:
             )
         )
 
-
     # STEP 2 - VALIDATE DOCUMENTS
-   
 
-    english_valid, english_error = (
-        validate_document(
-            english_result,
-            english_chunks,
-            "English"
-        )
+    (
+        english_valid,
+        english_error
+    ) = validate_document(
+        english_result,
+        english_chunks,
+        "English"
     )
 
 
-    sinhala_valid, sinhala_error = (
-        validate_document(
-            sinhala_result,
-            sinhala_chunks,
-            "Sinhala"
-        )
+    (
+        sinhala_valid,
+        sinhala_error
+    ) = validate_document(
+        sinhala_result,
+        sinhala_chunks,
+        "Sinhala"
     )
 
 
-    tamil_valid, tamil_error = (
-        validate_document(
-            tamil_result,
-            tamil_chunks,
-            "Tamil"
-        )
+    (
+        tamil_valid,
+        tamil_error
+    ) = validate_document(
+        tamil_result,
+        tamil_chunks,
+        "Tamil"
     )
 
 
     validation_errors = [
+
         message
 
-        for valid, message in [
+        for (
+            valid,
+            message
+        ) in [
+
             (
                 english_valid,
                 english_error
@@ -1908,7 +2544,9 @@ if check_button:
 
     if validation_errors:
 
-        for message in validation_errors:
+        for message in (
+            validation_errors
+        ):
 
             st.error(
                 message
@@ -1917,9 +2555,7 @@ if check_button:
 
         st.stop()
 
-
     # STEP 3 - NLP ANALYSIS
-    
 
     try:
 
@@ -1954,6 +2590,7 @@ if check_button:
             prepared = {
 
                 "English": {
+
                     "chunks":
                         english_chunks,
 
@@ -1963,6 +2600,7 @@ if check_button:
 
 
                 "Sinhala": {
+
                     "chunks":
                         sinhala_chunks,
 
@@ -1972,6 +2610,7 @@ if check_button:
 
 
                 "Tamil": {
+
                     "chunks":
                         tamil_chunks,
 
@@ -1980,10 +2619,6 @@ if check_button:
                 },
             }
 
-
-         
-            # Feature generation
-           
 
             english_features = (
                 build_document_features(
@@ -2009,31 +2644,30 @@ if check_button:
             )
 
 
-            
-            # Predictions
-           
-
-            english_analysis, _ = (
-                predict_missing_information(
-                    english_features,
-                    "English"
-                )
+            (
+                english_analysis,
+                _
+            ) = predict_missing_information(
+                english_features,
+                "English"
             )
 
 
-            sinhala_analysis, _ = (
-                predict_missing_information(
-                    sinhala_features,
-                    "Sinhala"
-                )
+            (
+                sinhala_analysis,
+                _
+            ) = predict_missing_information(
+                sinhala_features,
+                "Sinhala"
             )
 
 
-            tamil_analysis, _ = (
-                predict_missing_information(
-                    tamil_features,
-                    "Tamil"
-                )
+            (
+                tamil_analysis,
+                _
+            ) = predict_missing_information(
+                tamil_features,
+                "Tamil"
             )
 
 
@@ -2052,10 +2686,7 @@ if check_button:
         "Documents analyzed successfully."
     )
 
-
-  
     # DOCUMENT PREPARATION SUMMARY
-   
 
     st.subheader(
         "Document Preparation Summary"
@@ -2071,7 +2702,24 @@ if check_button:
         ],
 
 
+        "Detected Language": [
+
+            english_result[
+                "detected_language"
+            ],
+
+            sinhala_result[
+                "detected_language"
+            ],
+
+            tamil_result[
+                "detected_language"
+            ],
+        ],
+
+
         "Extraction Method": [
+
             english_result[
                 "method"
             ],
@@ -2087,6 +2735,7 @@ if check_button:
 
 
         "Characters": [
+
             english_result[
                 "characters"
             ],
@@ -2102,6 +2751,7 @@ if check_button:
 
 
         "Chunks": [
+
             len(
                 english_chunks
             ),
@@ -2123,10 +2773,7 @@ if check_button:
         hide_index=True
     )
 
-
-    
     # FINAL DOCUMENT CHECK RESULT
-  
 
     english_flagged = int(
         english_analysis[
@@ -2153,10 +2800,15 @@ if check_button:
 
 
     total_flagged = (
+
         english_flagged
+
         +
+
         sinhala_flagged
+
         +
+
         tamil_flagged
     )
 
@@ -2201,8 +2853,11 @@ if check_button:
 
 
         "Flagged Review Regions": [
+
             english_flagged,
+
             sinhala_flagged,
+
             tamil_flagged,
         ],
 
@@ -2211,31 +2866,42 @@ if check_button:
 
             (
                 "No issue detected"
+
                 if (
                     english_flagged
                     == 0
                 )
+
                 else
+
                 "Review recommended"
             ),
 
+
             (
                 "No issue detected"
+
                 if (
                     sinhala_flagged
                     == 0
                 )
+
                 else
+
                 "Review recommended"
             ),
 
+
             (
                 "No issue detected"
+
                 if (
                     tamil_flagged
                     == 0
                 )
+
                 else
+
                 "Review recommended"
             ),
         ],
@@ -2248,8 +2914,6 @@ if check_button:
         hide_index=True
     )
 
-
-  
     # POTENTIAL SECTIONS FOR MANUAL REVIEW
     
 
