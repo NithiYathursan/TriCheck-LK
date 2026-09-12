@@ -19,7 +19,7 @@ showWidgetBorder = true
 # =========================
 
 [theme.dark]
-primaryColor = "#60A5FA"
+primaryColor = "#3374c5"
 backgroundColor = "#111827"
 secondaryBackgroundColor = "#1F2937"
 textColor = "#F1F5F9"
