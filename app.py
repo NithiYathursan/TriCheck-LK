@@ -4,7 +4,6 @@ import json
 import re
 import shutil
 import unicodedata
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -14,10 +13,7 @@ import streamlit as st
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
-
-# ============================================================
 # STREAMLIT / PATHS
-# ============================================================
 
 st.set_page_config(
     page_title="TriCheck-LK",
@@ -28,10 +24,7 @@ st.set_page_config(
 PROJECT_ROOT = Path(__file__).resolve().parent
 MODEL_DIR = PROJECT_ROOT / "models"
 
-
-# ============================================================
 # CONFIGURATION
-# ============================================================
 
 MIN_TEXT_CHARS = 500
 MAX_CHUNK_CHARS = 1000
@@ -69,9 +62,7 @@ FALLBACK_MUTUAL_COVERAGE = 0.35
 FALLBACK_LENGTH_RATIO = 0.50
 
 
-# ============================================================
 # TESSERACT
-# ============================================================
 
 def configure_tesseract():
 
@@ -106,10 +97,7 @@ TESSERACT_AVAILABLE = (
     configure_tesseract()
 )
 
-
-# ============================================================
 # LOAD MODELS
-# ============================================================
 
 @st.cache_resource
 def load_resources():
@@ -180,10 +168,7 @@ except Exception as error:
 
     st.stop()
 
-
-# ============================================================
 # TEXT CLEANING
-# ============================================================
 
 def clean_text(text):
 
@@ -232,10 +217,7 @@ def clean_text(text):
         text.strip()
     )
 
-
-# ============================================================
 # LANGUAGE DETECTION
-# ============================================================
 
 def detect_text_language(text):
 
@@ -334,25 +316,12 @@ def script_range(
 
     return None
 
-
-# ============================================================
 # TEXT QUALITY
-# ============================================================
 
 def text_quality_score(
     text,
     language
 ):
-    """
-    Score extracted text quality.
-
-    A key corruption signal for Sinhala/Tamil PDFs is an
-    isolated Unicode combining mark at the beginning of a token.
-    PDF text layers with broken complex-script shaping often
-    produce many such tokens even though no literal replacement
-    character is present.
-    """
-
     text = clean_text(text)
 
     if not text:
@@ -517,11 +486,7 @@ def choose_best_extraction(
         direct_clean,
         "DIRECT_TEXT"
     )
-
-
-# ============================================================
 # DIRECT PDF EXTRACTION
-# ============================================================
 
 def extract_direct_text(
     pdf_bytes
@@ -604,9 +569,8 @@ def extract_direct_text(
             document.close()
 
 
-# ============================================================
+
 # OCR
-# ============================================================
 
 def extract_ocr_text(
     pdf_bytes,
@@ -814,9 +778,8 @@ def detect_language_with_ocr(
             document.close()
 
 
-# ============================================================
 # HYBRID PDF EXTRACTION
-# ============================================================
+
 def needs_ocr_fallback(
     text,
     language
@@ -1038,17 +1001,9 @@ def extract_pdf_text(
         }
 
    
-
-       
-        
-
-       
-
-        
-        # ========================================================
     # DIRECT TEXT FIRST
     # OCR ONLY IF THE DIRECT TEXT LOOKS DAMAGED
-    # ========================================================
+    
 
     if status == "DIRECT_TEXT":
 
@@ -1303,10 +1258,8 @@ def extract_pdf_text(
             "Unknown",
     }
 
-
-# ============================================================
 # CHUNKING
-# ============================================================
+
 
 def create_chunks(
     text,
@@ -1468,10 +1421,7 @@ def create_chunks(
 
     return chunks
 
-
-# ============================================================
 # DOCUMENT VALIDATION
-# ============================================================
 
 def validate_document(
     result,
@@ -1564,10 +1514,7 @@ def validate_document(
         ""
     )
 
-
-# ============================================================
 # EMBEDDINGS
-# ============================================================
 
 def create_embeddings(
     chunks,
@@ -1589,10 +1536,7 @@ def create_embeddings(
         )
     )
 
-
-# ============================================================
 # DTW
-# ============================================================
 
 def dtw_align(
     source_embeddings,
@@ -1769,10 +1713,7 @@ def dtw_align(
         similarity_matrix
     )
 
-
-# ============================================================
 # DOCUMENT PAIR METRICS
-# ============================================================
 
 def document_pair_metrics(
     embeddings_a,
@@ -1961,9 +1902,8 @@ def document_pair_metrics(
     }
 
 
-# ============================================================
 # DOCUMENT REFERENCE EXTRACTION
-# ============================================================
+
 
 def normalize_reference(
     reference
@@ -2146,9 +2086,8 @@ def extract_document_references(
     return references
 
 
-# ============================================================
 # FILENAME SUPPORT
-# ============================================================
+#
 
 def filename_document_key(
     filename
@@ -2183,10 +2122,7 @@ def filename_document_key(
         )
     )
 
-
-# ============================================================
 # PAIR DECISIONS
-# ============================================================
 
 def pair_semantic_match(
     metrics
@@ -2419,10 +2355,7 @@ def check_document_pair(
             metrics,
     }
 
-
-# ============================================================
 # VERIFY ALL 3 PAIRS
-# ============================================================
 
 def verify_same_document(
     prepared
@@ -2707,9 +2640,7 @@ def verify_same_document(
     )
 
 
-# ============================================================
 # IDENTIFY WHICH SINGLE LANGUAGE IS DIFFERENT
-# ============================================================
 
 def identify_mismatched_language(
     pair_results
@@ -2800,9 +2731,7 @@ def identify_mismatched_language(
     return "MULTIPLE"
 
 
-# ============================================================
 # SOURCE COVERAGE
-# ============================================================
 
 def get_source_coverage(
     path,
@@ -2913,10 +2842,7 @@ def add_compression_feature(
 
     return result
 
-
-# ============================================================
 # FEATURE GENERATION
-# ============================================================
 
 def build_document_features(
     prepared,
@@ -3193,10 +3119,8 @@ def build_document_features(
 
     return feature_df
 
-
-# ============================================================
 # MODEL PREDICTION
-# ============================================================
+
 
 def predict_missing_information(
     feature_df,
@@ -3258,30 +3182,11 @@ def predict_missing_information(
         effective_threshold
     )
 
-# ============================================================
 # NUMBERED SECTION MISSING-INFORMATION CHECK
-# ============================================================
 
 def extract_numbered_sections(
     chunks
 ):
-    """
-    Detect numbered document sections robustly.
-
-    Supports OCR variations such as:
-
-    1. Section
-    1 . Section
-    1) Section
-    1 ) Section
-    1 - Section
-    1: Section
-
-    Avoids matching times such as:
-    9.00
-    4.30
-    """
-
     section_map = {}
 
     pattern = re.compile(
@@ -3400,10 +3305,7 @@ def apply_numbered_section_rule(
         ]
     )
 
-
-    # --------------------------------------------------------
     # EXTRACT SECTION NUMBERS
-    # --------------------------------------------------------
 
     anchor_sections = (
         extract_numbered_sections(
@@ -3435,10 +3337,7 @@ def apply_numbered_section_rule(
         )
     )
 
-
-    # --------------------------------------------------------
     # A section must appear in BOTH other languages.
-    # --------------------------------------------------------
 
     confirmed_sections = (
         set(
@@ -3461,14 +3360,6 @@ def apply_numbered_section_rule(
 
     for section_number in candidate_missing_sections:
 
-    # --------------------------------------------------------
-    # A missing middle section is much stronger evidence.
-    #
-    # Example:
-    # Target has 3 and 5 but not 4
-    # -> strong evidence that section 4 is missing.
-    # --------------------------------------------------------
-
         previous_exists = (
             section_number - 1
             in target_sections
@@ -3489,12 +3380,7 @@ def apply_numbered_section_rule(
                 section_number
             )
 
-        
-
-
-    # --------------------------------------------------------
     # MAKE REQUIRED OUTPUT COLUMNS
-    # --------------------------------------------------------
 
     if (
         "review_score"
@@ -3529,10 +3415,7 @@ def apply_numbered_section_rule(
         "missing_section_numbers"
     ] = ""
 
-
-    # --------------------------------------------------------
     # FLAG SOURCE REGIONS CONTAINING THE MISSING SECTION
-    # --------------------------------------------------------
 
     for section_number in (
         missing_sections
@@ -3635,9 +3518,7 @@ def apply_numbered_section_rule(
         ] = new_value
 
 
-    # --------------------------------------------------------
     # DEBUG OUTPUT
-    # --------------------------------------------------------
 
     print(
         f"\n===== {target_language} SECTION CHECK ====="
@@ -3688,9 +3569,8 @@ def apply_numbered_section_rule(
         result_df,
         missing_sections
     )
-# ============================================================
+
 # REVIEW DISPLAY
-# ============================================================
 
 def display_flagged_sections(
     analysis_df,
@@ -3804,9 +3684,7 @@ def display_flagged_sections(
 
 
 
-# ============================================================
 # UI
-# ============================================================
 
 st.title(
     "🔎 TriCheck-LK",
@@ -3976,15 +3854,11 @@ if reset_button:
     st.rerun()
 
 
-# ============================================================
 # MAIN PIPELINE
-# ============================================================
 
 if check_button:
 
-    # --------------------------------------------------------
     # STEP 1 - PREPARE
-    # --------------------------------------------------------
 
     with st.spinner(
         "Preparing the three documents..."
@@ -4035,10 +3909,7 @@ if check_button:
             )
         )
 
-
-    # --------------------------------------------------------
     # STEP 2 - LANGUAGE VALIDATION
-    # --------------------------------------------------------
 
     validation_results = [
 
@@ -4088,10 +3959,7 @@ if check_button:
 
         st.stop()
 
-
-    # --------------------------------------------------------
     # STEP 3 - PAIR CHECKING
-    # --------------------------------------------------------
 
     try:
 
@@ -4162,10 +4030,7 @@ if check_button:
 
         st.stop()
 
-
-    # --------------------------------------------------------
     # STEP 4 - STOP IF DIFFERENT
-    # --------------------------------------------------------
 
     if not same_document:
 
@@ -4213,10 +4078,8 @@ if check_button:
 
         st.stop()
 
-
-    # --------------------------------------------------------
     # STEP 5 - SEMANTIC ANALYSIS
-    # --------------------------------------------------------
+    
 
     try:
 
@@ -4274,9 +4137,8 @@ if check_button:
                     "Tamil"
                 )
             )
-            # ========================================================
+            
             # STRUCTURAL MISSING-SECTION CHECK
-            # ========================================================
 
             (
                 english_analysis,
@@ -4318,10 +4180,7 @@ if check_button:
         "Documents analyzed successfully."
     )
 
-
-    # ========================================================
     # PREPARATION SUMMARY
-    # ========================================================
 
     st.subheader(
         "Document Preparation Summary"
@@ -4398,10 +4257,7 @@ if check_button:
         hide_index=True
     )
 
-
-    # ========================================================
     # RESULTS
-    # ========================================================
 
     english_flagged = int(
         english_analysis[
@@ -4504,11 +4360,8 @@ if check_button:
         hide_index=True
     )
 
-
-    # ========================================================
     # FLAGGED SECTIONS
-    # ========================================================
-
+    
     if total_flagged > 0:
 
         st.divider()
