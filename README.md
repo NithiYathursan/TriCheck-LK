@@ -2,7 +2,9 @@
 
 > **A multilingual NLP decision-support system for cross-lingual semantic consistency and missing-information detection in Sinhala, Tamil and English Sri Lankan government documents.**
 
-TriCheck-LK compares corresponding trilingual PDF documents, aligns semantically related sections, detects potential missing-information regions, and presents review-focused results through an interactive Streamlit interface.
+TriCheck-LK compares corresponding trilingual PDF documents, validates that the uploads belong to the correct languages and appear to represent the same source document, aligns semantically related regions, detects potential missing-information areas, and presents review-focused results through an interactive Streamlit interface.
+
+> **Current application behavior:** Model-only review alerts use a conservative minimum threshold of `0.60`, while a separate structural rule can flag confidently missing numbered sections for manual review.
 
 ---
 
@@ -10,23 +12,31 @@ TriCheck-LK compares corresponding trilingual PDF documents, aligns semantically
 
 - 📄 **Trilingual PDF Analysis:** Upload corresponding English, Sinhala and Tamil versions of the same government document for automated cross-language comparison.
 
-- 🔍 **Hybrid Text Extraction:** Uses PyMuPDF for direct PDF text extraction with Tesseract OCR fallback for scanned or insufficiently extractable documents.
+- 🌐 **Language-Slot Validation:** Detects whether each uploaded file is predominantly English, Sinhala or Tamil and rejects files placed in the wrong language uploader.
 
-- 🌐 **Unicode-Safe Multilingual Processing:** Cleans and normalizes English, Sinhala and Tamil text while preserving language-specific Unicode characters and Sinhala ZWJ/ZWNJ behavior.
+- 🔗 **Same-Document Verification:** Performs pairwise checks across English-Sinhala, English-Tamil and Sinhala-Tamil before semantic analysis. Document references and filename evidence are used when available together with multilingual semantic similarity and coverage metrics.
 
-- ✂️ **Sentence-Aware Chunking:** Divides long documents into semantic chunks of up to 1,000 characters while preserving document order and numbered sections.
+- 🔍 **Quality-Aware Hybrid Text Extraction:** Uses PyMuPDF for direct PDF text extraction and automatically falls back to Tesseract OCR when direct text is empty, insufficient or appears damaged.
+
+- 🔤 **Complex-Script Quality Checks:** Detects replacement characters, null characters, dotted-circle artifacts and isolated Unicode combining marks that may indicate broken Sinhala or Tamil PDF text layers.
+
+- 🌐 **Unicode-Safe Multilingual Processing:** Cleans and normalizes English, Sinhala and Tamil text while preserving language-specific Unicode content and Sinhala ZWJ/ZWNJ behavior.
+
+- ✂️ **Sentence-Aware Chunking:** Divides long documents into semantic chunks of up to 1,000 characters while preserving document order and numbered-section cues.
 
 - 🧠 **Multilingual Semantic Embeddings:** Uses `intfloat/multilingual-e5-small` to represent English, Sinhala and Tamil text in a shared semantic vector space.
 
-- 🔗 **Order-Aware Semantic Alignment:** Uses Dynamic Time Warping (DTW) to align multilingual document sections even when translations contain different numbers of sentences or chunks.
+- 🔗 **Order-Aware Semantic Alignment:** Uses Dynamic Time Warping (DTW) to align multilingual document regions even when translations contain different numbers of sentences or chunks.
 
 - 🧪 **Controlled Missing-Information Simulation:** Creates supervised training and evaluation examples by introducing controlled omissions into complete real government circulars.
 
 - 🤖 **Language-Specific ML Detectors:** Uses separate optimized classifiers for English, Sinhala and Tamil rather than forcing a single model across all three languages.
 
-- 🚩 **Flagged Review Regions:** Highlights potentially inconsistent or missing sections and displays corresponding language regions side-by-side for human review.
+- 🛡️ **Conservative Review Threshold:** The application uses a minimum review threshold of `0.60` for model-only alerts, reducing low-confidence review recommendations while retaining each model's raw score for inspection.
 
-- ✅ **Document Validation:** Detects unreadable files, insufficient text, empty documents and PDFs uploaded into the wrong language slot.
+- 🔢 **Structural Numbered-Section Check:** If a numbered section exists in both other language versions but is missing between adjacent sections in the target language, the system independently recommends manual review.
+
+- 🚩 **Review-Focused Output:** Shows review scores and side-by-side multilingual regions. When a numbered section is structurally absent, the UI explicitly reports that it was not detected instead of displaying an unrelated nearest-matching chunk.
 
 - 🔄 **Reset Documents:** Allows users to clear the current document set and immediately begin another trilingual comparison.
 
@@ -57,62 +67,67 @@ https://pubad.gov.lk/web/index.php?lang=en&option=com_circular&view=circulars
 
 The document text used by TriCheck-LK comes from **real Sri Lankan government circulars**.
 
-However, the original repository does not provide verified labels showing exactly where information is missing between language versions.
+However, the original dataset does not provide verified labels showing exactly where information is missing between language versions.
 
 To obtain reliable ground truth for supervised learning, controlled sections were deliberately removed from complete trilingual documents.
 
 > **Synthetic refers only to the introduced missing-information scenarios — not to the underlying government text.**
 
-Final multilingual experiment:
+### Final Multilingual Experiment
 
-- 📑 100 real circulars
-- 🌐 3 target languages
-- 🧪 900 controlled scenarios
-- 📊 12,480 feature rows
-- 🚩 2,783 synthetic missing-information instances
+- 📑 **100** real circulars
+- 🌐 **3** target languages
+- 🧪 **900** controlled scenarios
+- 📊 **12,480** feature rows
+- 🚩 **2,783** synthetic missing-information instances
 
 ---
 
 ## ⚙️ NLP Workflow
 
 ```text
-Official Government Circulars
+English / Sinhala / Tamil PDFs
           │
           ▼
-     Web Scraping
+   Language Validation
           │
           ▼
- Metadata & PDF Validation
+ Same-Document Verification
           │
           ▼
- Hybrid PDF Extraction
-   ┌──────┴──────┐
-   ▼             ▼
-PyMuPDF      Tesseract OCR
-   └──────┬──────┘
+ Quality-Aware PDF Extraction
+    ┌──────┴──────┐
+    ▼             ▼
+ PyMuPDF      Tesseract OCR
+    └──────┬──────┘
           ▼
- Unicode-Safe Cleaning
+  Unicode-Safe Cleaning
           │
           ▼
- Sentence-Aware Chunking
+  Sentence-Aware Chunking
           │
           ▼
- Multilingual E5 Embeddings
+  Multilingual E5 Embeddings
           │
           ▼
- Dynamic Time Warping
+  Dynamic Time Warping
           │
           ▼
- Feature Engineering
+  Feature Engineering
           │
           ▼
  Language-Specific Models
           │
-          ▼
- Flagged Review Regions
-          │
-          ▼
-   Streamlit Application
+          ├───────────────┐
+          ▼               ▼
+ Conservative ML     Numbered-Section
+ Review Decision     Structural Check
+          └───────┬───────┘
+                  ▼
+        Manual Review Regions
+                  │
+                  ▼
+        Streamlit Application
 ```
 
 ---
@@ -146,17 +161,23 @@ TriCheck-LK therefore uses **Dynamic Time Warping (DTW)** to:
 
 ## 🤖 Final Models
 
-| Target Language | Model | Decision Threshold |
-|---|---|---:|
-| 🇬🇧 English | HistGradientBoosting | 0.40 |
-| 🇱🇰 Sinhala | SVM (RBF) | 0.40 |
-| 🇱🇰 Tamil | Random Forest | 0.50 |
-
-The final model configuration is stored in:
+The trained model configuration is stored in:
 
 ```text
 models/tricheck_multilingual_config.json
 ```
+
+The final Streamlit application applies a conservative minimum review threshold of `0.60` to model-only alerts.
+
+| Target Language | Model | Stored Model Threshold | App Review Threshold |
+|---|---|---:|---:|
+| 🇬🇧 English | HistGradientBoosting | 0.40 | **0.60** |
+| 🇱🇰 Sinhala | SVM (RBF) | 0.40 | **0.60** |
+| 🇱🇰 Tamil | Random Forest | 0.50 | **0.60** |
+
+The original model score is retained for review display and analysis.
+
+Separately, a high-confidence structural numbered-section rule can recommend manual review even when the model-only threshold is not reached.
 
 ---
 
@@ -207,21 +228,55 @@ For this reason, TriCheck-LK presents predictions as **review recommendations**,
 
 Users upload:
 
-- 🇬🇧 English PDF
-- 🇱🇰 Sinhala PDF
-- 🇱🇰 Tamil PDF
+- 🇬🇧 **English PDF**
+- 🇱🇰 **Sinhala PDF**
+- 🇱🇰 **Tamil PDF**
 
-The application automatically performs:
+Before running missing-information analysis, the application checks both **language placement** and **document correspondence**.
 
-**PDF Extraction → Validation → Cleaning → Chunking → Embedding → DTW Alignment → Feature Generation → Prediction → Review Display**
+Pairwise document verification uses circular/reference information where available, filename evidence where useful, and multilingual semantic metrics.
 
-The output includes:
+### Application Workflow
+
+```text
+PDF Upload
+    ↓
+Language Validation
+    ↓
+Same-Document Verification
+    ↓
+Quality-Aware Extraction
+    ↓
+Text Cleaning
+    ↓
+Chunking
+    ↓
+Multilingual Embeddings
+    ↓
+DTW Alignment
+    ↓
+Feature Generation
+    ↓
+ML Prediction
+    ↓
+Structural Section Check
+    ↓
+Review Display
+```
+
+### Output Includes
 
 - **No issue detected**
 - **Review recommended**
 - **Flagged Review Regions**
-- side-by-side multilingual section comparison
-- model scores for flagged regions
+- **Review score** for each flagged region
+- side-by-side multilingual comparison for model-based review regions
+- explicit **numbered section not detected** messages when structural checks identify an absent section
+- document preparation summary showing:
+  - detected language
+  - extraction method
+  - character count
+  - chunk count
 
 ---
 
@@ -229,39 +284,162 @@ The output includes:
 
 TriCheck-LK validates documents before model analysis.
 
-It can detect:
+It can detect or stop on:
 
-- ❌ unreadable PDFs;
-- ❌ insufficient usable text;
-- ❌ blank extracted content;
-- ❌ documents producing no valid chunks;
-- ❌ documents uploaded into the wrong language section.
+- ❌ unreadable PDFs
+- ❌ insufficient usable text
+- ❌ blank extracted content
+- ❌ documents producing no valid chunks
+- ❌ documents uploaded into the wrong language section
+- ❌ uploaded files that do not appear to be corresponding English, Sinhala and Tamil versions of the same document
 
-For example, a Sinhala PDF uploaded into the Tamil uploader can be detected and rejected before semantic analysis.
+Same-document verification is performed pairwise across the three language versions.
+
+The system checks:
+
+```text
+English ↔ Sinhala
+English ↔ Tamil
+Sinhala ↔ Tamil
+```
+
+If two versions agree strongly and one does not, the application can identify the likely mismatched language.
+
+If the evidence is not strong enough to isolate a single mismatched document, TriCheck-LK reports that **two or more documents may be unrelated** instead of guessing.
+
+---
+
+## 🔍 PDF Text Extraction
+
+TriCheck-LK uses a quality-aware extraction strategy.
+
+### Direct Extraction
+
+PyMuPDF is used first to extract text directly from the PDF.
+
+### OCR Fallback
+
+For Sinhala and Tamil documents, OCR may be used when the direct PDF text appears damaged or unusable.
+
+The application checks for issues such as:
+
+- replacement characters;
+- null characters;
+- dotted-circle artifacts;
+- isolated Unicode combining marks;
+- insufficient native-script characters;
+- poor extraction quality.
+
+When OCR is required, PDF pages are rendered as images and processed using **Tesseract OCR** through **PyTesseract**.
+
+This approach helps support both:
+
+- text-based PDFs;
+- scanned or poorly encoded PDFs.
+
+---
+
+## 🔢 Structural Missing-Section Detection
+
+Model predictions are not the only source of review recommendations.
+
+TriCheck-LK also performs a structural numbered-section check.
+
+For example:
+
+```text
+English:
+1 2 3 4 5 6 7
+
+Sinhala:
+1 2 3 4 5 6 7
+
+Tamil:
+1 2 3   5 6 7
+```
+
+Because **Section 4** appears in both English and Sinhala but is missing from Tamil while Sections 3 and 5 are present, TriCheck-LK identifies Section 4 as a strong structural omission.
+
+The corresponding target language is then recommended for manual review.
+
+This rule is deliberately conservative and focuses mainly on missing **middle sections**.
+
+---
+
+## 🎯 Review Philosophy
+
+TriCheck-LK does not automatically declare that a translation is correct or incorrect.
+
+Instead, the system identifies **regions that may require additional human attention**.
+
+The final application combines:
+
+- machine-learning predictions;
+- multilingual semantic alignment;
+- document structure;
+- section-number evidence;
+- extraction-quality checks.
+
+This makes TriCheck-LK a **decision-support system** rather than an automatic certification tool.
 
 ---
 
 ## 🛠️ Technology Stack
 
+### Final Streamlit Application
+
 - 🐍 **Python**
 - 🖥️ **Streamlit**
-- 📄 **PyMuPDF**
-- 🔤 **Tesseract OCR**
-- 🤗 **Sentence-Transformers**
-- 🧠 **multilingual-e5-small**
-- 🤖 **Scikit-learn 1.8.0**
-- 🐼 **Pandas**
 - 🔢 **NumPy**
+- 🐼 **Pandas**
 - 💾 **Joblib**
+- 🤖 **Scikit-learn 1.8.0**
+- 🤗 **Sentence-Transformers**
+- 🧠 **`intfloat/multilingual-e5-small`**
+- 📄 **PyMuPDF**
+- 🔤 **PyTesseract**
+- 🔍 **Tesseract OCR**
+- 🖼️ **Pillow**
+
+### Project / Data Pipeline
+
+- 🌐 **Requests**
 - 📓 **Jupyter Notebook**
 - 🌿 **Git & GitHub**
+
+> `Requests` is mainly used by the data-collection utilities rather than the final Streamlit inference path.
+
+---
+
+## 📦 Python Dependencies
+
+The main Python dependencies include:
+
+```text
+streamlit
+numpy
+pandas
+joblib
+scikit-learn==1.8.0
+sentence-transformers
+PyMuPDF
+pytesseract
+Pillow
+requests
+```
+
+Install them using:
+
+```bash
+python -m pip install -r requirements.txt
+```
 
 ---
 
 ## 📁 Project Structure
 
 ```text
-TriCheck_LK/
+TriCheck-LK/
 │
 ├── app.py
 ├── README.md
@@ -297,28 +475,34 @@ TriCheck_LK/
 
 ## ⚡ Installation
 
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
-cd TriCheck_LK
+git clone https://github.com/NithiYathursan/TriCheck-LK.git
+cd TriCheck-LK
 ```
 
-### 2. Create a virtual environment
+### 2. Create a Virtual Environment
 
 ```bash
 python -m venv .venv
 ```
 
-### 3. Activate it
+### 3. Activate the Virtual Environment
 
-Windows:
+#### Windows PowerShell
 
-```bash
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+#### Windows Command Prompt
+
+```cmd
 .venv\Scripts\activate
 ```
 
-### 4. Install dependencies
+### 4. Install Dependencies
 
 ```bash
 python -m pip install -r requirements.txt
@@ -338,19 +522,21 @@ sin
 tam
 ```
 
-The current Windows development configuration uses:
+The application first attempts to locate `tesseract` from the system `PATH`.
+
+On Windows, it also checks the common installation location:
 
 ```text
 C:\Program Files\Tesseract-OCR\tesseract.exe
 ```
 
-If Tesseract is installed elsewhere, update the path in `app.py`.
+If Tesseract is unavailable, direct-text PDFs can still be processed, but scanned or damaged Sinhala and Tamil PDFs may not be handled reliably.
 
 ---
 
 ## ▶️ Run the Application
 
-From the project root:
+From the project root directory:
 
 ```bash
 streamlit run app.py
@@ -362,21 +548,65 @@ or:
 python -m streamlit run app.py
 ```
 
-The TriCheck-LK interface will open in the browser.
+The application will normally open at:
+
+```text
+http://localhost:8501
+```
+
+---
+
+## 📋 Using the Application
+
+1. Upload the **English PDF**.
+2. Upload the corresponding **Sinhala PDF**.
+3. Upload the corresponding **Tamil PDF**.
+4. Click **Check Documents**.
+5. Wait while TriCheck-LK:
+   - extracts the text;
+   - validates the languages;
+   - verifies document correspondence;
+   - creates embeddings;
+   - performs DTW alignment;
+   - generates model features;
+   - performs ML inference;
+   - performs structural checks.
+6. Review the **Document Preparation Summary**.
+7. Review the **Document Check Result**.
+8. Inspect any sections listed under **Sections Recommended for Review**.
+9. Use **Reset Documents** to begin a new comparison.
 
 ---
 
 ## ⚠️ Limitations
 
 - Synthetic omissions are used as ground truth instead of human-annotated real-world missing-information labels.
-- OCR quality may affect semantic representations.
-- Some Tamil PDFs contain problematic direct-text font or character encoding.
+
+- OCR quality may affect semantic representations and downstream alignment.
+
+- Some Sinhala and Tamil PDFs contain damaged embedded text layers caused by font or character encoding.
+
+- OCR fallback can improve usability but may still introduce recognition errors.
+
 - Chunk boundaries are approximate semantic regions rather than exact legal or translation units.
-- The English detector produces comparatively more false-positive warnings.
+
+- The underlying English detector has comparatively lower precision.
+
+- The final application uses a conservative `0.60` minimum review threshold to suppress low-confidence model alerts, but false positives may still occur.
+
+- The structural numbered-section rule is intentionally conservative and is strongest for missing **middle sections** where both adjacent section numbers are present.
+
+- Same-document verification uses available document references, filenames and semantic evidence.
+
+- Unusual filenames or highly similar unrelated documents can still be challenging.
+
 - The system was primarily trained and evaluated using Sri Lankan Public Administration circulars.
+
 - Performance on other document domains has not been comprehensively validated.
-- Model scores should not be interpreted as guaranteed probabilities.
-- TriCheck-LK cannot certify legal or linguistic equivalence.
+
+- Review scores should not be interpreted as calibrated probabilities or legal confidence values.
+
+- TriCheck-LK cannot certify legal, administrative or linguistic equivalence.
 
 ---
 
@@ -388,22 +618,37 @@ TriCheck-LK is designed as a:
 
 It aims to reduce manual comparison effort by identifying document regions that may require additional attention.
 
-It is **not** intended to replace professional translation review or serve as an automatic legal or administrative certification system.
+The system is intended to **support human verification**, not replace it.
+
+TriCheck-LK is **not** intended to:
+
+- replace professional translation review;
+- make legal decisions;
+- certify linguistic equivalence;
+- certify administrative equivalence;
+- automatically determine whether an official translation is legally correct.
 
 ---
 
 ## 🔮 Future Work
 
-- Human-annotated multilingual benchmark datasets
-- Improved English precision
-- Better Tamil PDF encoding-quality detection
-- Advanced OCR quality assessment
-- Paragraph- and clause-level semantic segmentation
-- Probability calibration
-- Explainable missing-information detection
-- Additional Sri Lankan government document sources
-- Public web deployment
-- Document-level semantic consistency scoring
+Possible future improvements include:
+
+- human-annotated multilingual benchmark datasets;
+- improved English precision;
+- language-specific threshold calibration;
+- improved Sinhala and Tamil PDF text-layer quality assessment;
+- advanced OCR quality assessment;
+- post-OCR correction for Sinhala and Tamil;
+- improved document-reference extraction across different circular formats;
+- paragraph-level semantic segmentation;
+- clause-level semantic segmentation;
+- probability calibration;
+- clearer review-score interpretation;
+- explainable missing-information detection;
+- additional Sri Lankan government document sources;
+- public web deployment;
+- document-level semantic consistency scoring.
 
 ---
 
@@ -417,6 +662,10 @@ Sabaragamuwa University of Sri Lanka
 
 ## 📌 Disclaimer
 
-TriCheck-LK was developed as an academic NLP project.
+TriCheck-LK was developed as an **academic Natural Language Processing project**.
 
-All outputs should be interpreted as **automated review recommendations**. Important administrative documents should still undergo appropriate human verification.
+All outputs should be interpreted as **automated review recommendations**.
+
+Important administrative documents should still undergo appropriate human verification.
+
+The system does not provide legal, linguistic or administrative certification.
