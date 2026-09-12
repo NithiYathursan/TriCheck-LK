@@ -14,9 +14,7 @@ borderColor = "#94A3B8"
 showWidgetBorder = true
 
 
-# =========================
 # DARK THEME
-# =========================
 
 [theme.dark]
 primaryColor = "#3374c5"
